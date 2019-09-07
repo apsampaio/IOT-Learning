@@ -27,13 +27,26 @@ void clientConnection();
 
 //Callback function
 void callback(char* topic, byte* payload, unsigned int length) {
-  Serial.print("Message arrived [");
-  Serial.print(topic);
-  Serial.print("] ");
-  for (int i = 0; i < length; i++) {
-    Serial.print((char)payload[i]);
+  StaticJsonDocument<200> jsonMQTT;
+  DeserializationError error = deserializeJson(jsonMQTT, payload);
+
+  // Test if parsing succeeds.
+  if (error) {
+    Serial.print(F("deserializeJson() failed: "));
+    Serial.println(error.c_str());
+    return;
   }
-  Serial.println();
+  const char* id = jsonMQTT["id"];
+  String metric = jsonMQTT["metric"];
+  long value = jsonMQTT["value"];
+
+  Serial.println("==PACKAGE==");
+  Serial.print("Id: ");
+  Serial.println(id);
+  Serial.print("Metric: ");
+  Serial.println(metric);
+  Serial.print("Value: ");
+  Serial.println(value);  
 }
 
 //Creating objects of connection with network and MQTT server
@@ -50,10 +63,13 @@ void setup() {
         Serial.print(".");
     }
     Serial.println("WiFi connected");
+    
     clientConnection();
+    client.subscribe(SUB);
+
     oldConnection = millis();
     oldPublishing = millis();
-    client.loop();
+
 }
 
 void loop() {
@@ -64,14 +80,15 @@ void loop() {
 }
 
 void publishing() {
-  //Publish a Random number
+  //Publish a Random number every minute
   currentPublishing = millis();
   if((currentPublishing - oldPublishing) >= 60000) { 
-    
+
     data = jsonMqttData("NODEMCU1", "Random", random(100));
     Serial.println(data);
     client.publish(PUB,data);
     oldPublishing = millis();
+ 
   }
 }
 
@@ -81,34 +98,11 @@ void loopConnection(){
    
   currentConnection = millis();
   if((currentConnection - oldConnection) >= 5000) { 
-    client.loop();
-    Serial.println("Connection Loop!");
-    Serial.print("MQTT Connection: ");
-      
-    switch(client.state()){
-      case -4: Serial.println("CONNECTION_TIMEOUT");
-                clientConnection();
-      break;
-      case -3: Serial.println("CONNECTION_LOST");
-      break;
-      case -2: Serial.println("CONNECT_FAILED");
-      break;
-      case -1: Serial.println("DISCONNECTED");
-      break;
-      case 0: Serial.println("CONNECTED");
-      break;
-      case 1: Serial.println("CONNECT_BAD_PROTOCOL");
-      break;
-      case 2: Serial.println("CONNECT_BAD_CLIENT_ID");
-      break;
-      case 3: Serial.println("CONNECT_UNAVAILABLE");
-      break;
-      case 4: Serial.println("CONNECT_BAD_CREDENTIALS");
-      break;
-      case 5: Serial.println("CONNECT_UNAUTHORIZED");
-    }
 
+    client.loop();
+    if(client.state() < 0 || client.state() >= 1) clientConnection();
     oldConnection = millis();
+  
   }
 }
 
